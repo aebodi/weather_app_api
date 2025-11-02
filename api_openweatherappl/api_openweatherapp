@@ -1,0 +1,127 @@
+"""
+    Part 2 — Building the Application
+1. Prompt the user for input such as a city name or coordinates.
+2. Ask for units of measurement (Celsius or Fahrenheit).
+3. Request weather data from the OpenWeatherMap API using your key.
+4. Handle common errors such as missing keys, invalid cities, or network issues.
+Object-Oriented Programming
+5. Parse the returned JSON data to extract and display relevant weather information.
+6. Display the weather information clearly, showing location, temperature, humidity, wind,
+and sunrise/sunset times.
+7. Allow the user to query multiple cities until they choose to exit
+    """
+import os
+import requests
+from datetime import datetime
+import json
+import dotenv
+dotenv.load_dotenv()
+
+
+class WeatherAPI:
+    def __init__(self):
+        self.api_key = os.getenv("OWM_API_KEY")
+        if not self.api_key:
+            raise ValueError(
+                "Error: OpenWeatherMap API key not found. Please set OWM_API_KEY in your .env file.")
+        self.base_url = "http://api.openweathermap.org/data/2.5/weather"
+        self.units_dict = {
+            "1": "standard",
+            "2": "metric",
+            "3": "imperial",
+            "kelvin": "standard",
+            "celsius": "metric",
+            "fahrenheit": "imperial",
+            "standard": "standard",
+            "metric": "metric",
+            "imperial": "imperial"
+        }
+        self.temp_symbols = {
+            "standard": "K",
+            "metric": "°C",
+            "imperial": "°F"
+        }
+
+    def get_weather(self, city_name, units):
+        params = {
+            "appid": self.api_key,
+            "q": city_name,
+            "units": units
+        }
+        try:
+            response = requests.get(self.base_url, params=params, timeout=10)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.HTTPError as e:
+            if response.status_code == 401:
+                print("Error: Invalid API key.")
+            elif response.status_code == 404:
+                print("Error: City not found.")
+            else:
+                print(f"HTTP Error: {e}")
+        except requests.exceptions.RequestException as e:
+            print(f"Network error: {e}")
+        return None
+
+    def display_weather(self, data, units):
+        if not data:
+            return
+
+        main = data.get("main", {})
+        sys_data = data.get("sys", {})
+        weather = data.get("weather", [{}])[0]
+        wind = data.get("wind", {})
+
+        location = f"{data.get('name', 'Unknown')}, {sys_data.get('country', '')}"
+        temp_symbol = self.temp_symbols.get(units, "")
+
+        sunrise = datetime.fromtimestamp(sys_data.get("sunrise", 0)).strftime(
+            "%H:%M:%S") if sys_data.get("sunrise") else "N/A"
+        sunset = datetime.fromtimestamp(sys_data.get("sunset", 0)).strftime(
+            "%H:%M:%S") if sys_data.get("sunset") else "N/A"
+
+        print("\n" + "="*50)
+        print(f"Weather Information for {location}")
+        print("="*50)
+        print(f"Temperature: {main.get('temp', 'N/A')}{temp_symbol}")
+        print(f"Humidity: {main.get('humidity', 'N/A')}%")
+        print(f"Weather: {weather.get('description', 'N/A').title()}")
+        print(
+            f"Wind Speed: {wind.get('speed', 'N/A')} {'m/s' if units != 'imperial' else 'mph'}")
+        print(f"Sunrise: {sunrise}")
+        print(f"Sunset: {sunset}")
+        print("="*50)
+
+    def run(self):
+        print("Welcome to the Weather App!")
+        while True:
+            city_name = input("Enter city name: ").strip()
+            if not city_name:
+                print("City name cannot be empty.")
+                continue
+
+            print("\nChoose unit of measurement:")
+            print("1- Standard (Kelvin)\n2- Metric (Celsius)\n3- Imperial (Fahrenheit)")
+            units_input = input("Enter number or name: ").strip().lower()
+            units = self.units_dict.get(units_input, "metric")
+
+            data = self.get_weather(city_name, units)
+            self.display_weather(data, units)
+
+            cont = input(
+                "\nWould you like to check another city? (yes/no): ").strip().lower()
+            if cont != "yes":
+                print(" Thank you for using the Weather App. Goodbye!")
+                break
+
+
+if __name__ == "__main__":
+    try:
+        app = WeatherAPI()
+        app.run()
+    except ValueError as e:
+        print(f"Value Error: {e}")
+    except KeyboardInterrupt:
+        print("\n Application exited by user. Goodbye!")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
